@@ -13,10 +13,6 @@ public:
     static long double hyperbolicTangent(long double value);
     
     static long double derivativeHyperbolicTangent(long double value);
-    
-    static long double RELU(long double value);
-    
-    static long double derivativeRELU(long double value);
 };
 
 #endif
