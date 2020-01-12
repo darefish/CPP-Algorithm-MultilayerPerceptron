@@ -1,6 +1,6 @@
 #include "File.hpp"
 
-std::vector<std::vector<long double>> File::readAsMatrix(const char* directory,unsigned long long int length) {
+std::vector<std::vector<long double>> File::readAsMatrix(const char* directory,unsigned long long int interval) {
     
     std::vector<std::vector<long double>> output;
     
@@ -15,7 +15,7 @@ std::vector<std::vector<long double>> File::readAsMatrix(const char* directory,u
         
         while(file>>value) {
             file.ignore();
-            if(count%length==0 && count!=0) {
+            if(count%interval==0 && count!=0) {
                 output.push_back(local);
                 local.clear();
             }
@@ -23,6 +23,7 @@ std::vector<std::vector<long double>> File::readAsMatrix(const char* directory,u
             
             count++;
         }
+        file.close();
         
         output.push_back(local);
         
@@ -42,6 +43,8 @@ std::vector<long double> File::readAsVector(const char* directory) {
         while(file>>value) {
             output.push_back(value);
         }
+        
+        file.close();
     }
     
     return output;
