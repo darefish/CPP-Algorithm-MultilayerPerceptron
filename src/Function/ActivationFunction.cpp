@@ -15,19 +15,3 @@ long double ActivationFunction::hyperbolicTangent(long double value) {
 long double ActivationFunction::derivativeHyperbolicTangent(long double value) {
     return 1-pow(value,2);
 }
-
-long double ActivationFunction::RELU(long double value) {
-    if(value>0) {
-        return value;
-    }else {
-        return 0;
-    }
-}
-
-long double ActivationFunction::derivativeRELU(long double value) {
-    if(value>0) {
-        return 1;
-    }else {
-        return 0;
-    }
-}
