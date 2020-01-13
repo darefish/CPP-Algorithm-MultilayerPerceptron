@@ -32,46 +32,30 @@ std::ostream& operator<<(std::ostream& ostream,Timer& timer) {
     return ostream;
 }
 
-std::vector<std::vector<long double>> toMatrix(std::vector<long double> vector) {
-    std::vector<std::vector<long double>> output;
-    
-    for(auto i=0;i<vector.size();++i) {
-        std::vector<long double> local;
-        
-        for(auto x=0;x<10;++x) {
-            if(x==vector[i]) {
-                local.push_back(1);
-            }else {
-                local.push_back(0);
-            }
-        }
-        output.push_back(local);
-    }
-    
-    return output;
-}
-
 int main() {
-    
     srand((unsigned)time(nullptr));
     
     NeuralNetwork* nn;
     
+    long double(*forward)(long double)=ActivationFunction::hyperbolicTangent;
+    
+    long double(*backward)(long double)=ActivationFunction::derivativeHyperbolicTangent;
+    
     std::vector<std::vector<long double>> input;
-
+    
     std::vector<std::vector<long double>> output;
-
+    
     {
         Timer timer("Data Initialization");
-
+        
         timer.start();
-
+        
         input=File::readAsMatrix("/Users/jiangtengda/Desktop/XOR/input.txt",2);
-
+        
         output=File::readAsMatrix("/Users/jiangtengda/Desktop/XOR/output.txt",1);
-
+        
         timer.stop();
-
+        
         std::cout<<timer<<std::endl;
     }
 
@@ -80,7 +64,11 @@ int main() {
 
         timer.start();
 
-        nn=new NeuralNetwork({2,2,1},input,output);
+        nn=new NeuralNetwork({2,2,1});
+        
+        nn->setActivationFunction(forward,backward);
+        
+        nn->loadData(input,output);
 
         timer.stop();
 
@@ -89,19 +77,19 @@ int main() {
     
     std::cout<<"Before Training"<<std::endl;
 
-    std::cout<<nn->getCost(ActivationFunction::hyperbolicTangent)<<std::endl;
+    std::cout<<"Cost: "<<nn->getCost()<<std::endl;
 
     for(auto i=0;i<input.size();++i) {
-        std::vector<long double> actualOutput=nn->predict(input[i],ActivationFunction::hyperbolicTangent);
+        std::vector<long double> actualOutput=nn->predict(input[i]);
         std::cout<<input[i]<<" -> "<<actualOutput<<std::endl;
     }
 
     {
-        Timer timer("NeuralNetwork Training Time");
+        Timer timer("Mini Batch Training Time");
 
         timer.start();
 
-        nn->stochasticGradientDescent(10000,0.5,ActivationFunction::hyperbolicTangent,ActivationFunction::derivativeHyperbolicTangent);
+        nn->miniBatchGradientDescent(2,5000,0.5,false,"");
 
         timer.stop();
 
@@ -110,10 +98,10 @@ int main() {
 
     std::cout<<"After Training"<<std::endl;
 
-    std::cout<<nn->getCost(ActivationFunction::hyperbolicTangent)<<std::endl;
+    std::cout<<"Cost "<<nn->getCost()<<std::endl;
 
     for(auto i=0;i<input.size();++i) {
-        std::vector<long double> actualOutput=nn->predict(input[i],ActivationFunction::hyperbolicTangent);
+        std::vector<long double> actualOutput=nn->predict(input[i]);
         std::cout<<input[i]<<" -> "<<actualOutput<<std::endl;
     }
 }
