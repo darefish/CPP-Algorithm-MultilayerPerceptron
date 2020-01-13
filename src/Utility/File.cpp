@@ -49,3 +49,13 @@ std::vector<long double> File::readAsVector(const char* directory) {
     
     return output;
 }
+
+void File::writeAsVector(const char* directory,std::vector<long double>& vector) {
+    std::ofstream file(directory);
+    
+    for(auto i=0;i<vector.size();++i) {
+        file<<vector[i]<<"\n";
+    }
+    
+    file.close();
+}
