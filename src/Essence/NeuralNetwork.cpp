@@ -18,12 +18,13 @@ void NeuralNetwork::reset() {
     }
 }
 
-void NeuralNetwork::shuffle(std::vector<std::vector<long double>>& vector) {
-    for(auto i=0;i<vector.size()/2;++i) {
-        unsigned long long int one=rand()%vector.size();
-        unsigned long long int two=rand()%vector.size();
+void NeuralNetwork::shuffle(std::vector<std::vector<long double>>& input,std::vector<std::vector<long double>>& output) {
+    for(auto i=0;i<input.size()/2;++i) {
+        unsigned long long int one=rand()%input.size();
+        unsigned long long int two=rand()%input.size();
         
-        std::swap(vector[one],vector[two]);
+        std::swap(input[one],input[two]);
+        std::swap(output[one],output[two]);
     }
 }
 
@@ -41,10 +42,11 @@ std::vector<long double> NeuralNetwork::getLayerOutput(unsigned long long int la
     for(auto i=0;i<structure[layer].size();++i) {
         output.push_back(structure[layer][i].value);
     }
+    
     return output;
 }
 
-std::vector<long double> NeuralNetwork::forwardPropagation(std::vector<long double>& input,long double(*forward)(long double)) {
+std::vector<long double> NeuralNetwork::forwardPropagation(std::vector<long double>& input) {
     
     for(auto i=0;i<structure[0].size();++i) {
         structure[0][i].value+=input[i];
@@ -62,62 +64,91 @@ std::vector<long double> NeuralNetwork::forwardPropagation(std::vector<long doub
     return getLayerOutput(structure.size()-1);
 }
 
-std::vector<std::vector<long double>> NeuralNetwork::getLayerError(std::vector<long double>& error,long double(*backward)(long double)) {
+std::vector<std::vector<long double>> NeuralNetwork::getBiasesLayerError(std::vector<long double>& actualOutput,std::vector<long double>& targetOutput) {
 
-    std::vector<std::vector<long double>> layerError;
+    std::vector<std::vector<long double>> biasesLayerError;
     
-    std::vector<long double> localOutput=getLayerOutput(structure.size()-1);
-    std::vector<long double> localDerivative=Vector::operationOfVector(localOutput,backward);
-    std::vector<long double> localError=Vector::multiplicationOfVector(localDerivative,error);
+    std::vector<long double> difference=Vector::subtractionOfVector(actualOutput,targetOutput);
     
-    layerError.push_back(localError);
+    std::vector<long double> output=getLayerOutput(structure.size()-1);
     
-    for(long int i=structure.size()-2;i>0;i--) {
+    std::vector<long double> derivative=Vector::operationOfVector(output,backward);
+    
+    std::vector<long double> error=Vector::multiplicationOfVector(difference,derivative);
+    
+    biasesLayerError.push_back(error);
+    
+    for(auto i=structure.size()-2;i>0;--i) {
+        std::vector<long double> difference;
         
-        std::vector<long double> localError;
+        std::vector<long double> output=getLayerOutput(i);
+        
+        std::vector<long double> derivative=Vector::operationOfVector(output,backward);
         
         for(auto x=0;x<structure[i].size();++x) {
-            std::vector<long double> localSum=Vector::multiplicationOfVector(structure[i][x].weights,layerError[structure.size()-2-i]);
-            localError.push_back(Vector::sumOfVector(localSum));
+            std::vector<long double> sum=Vector::multiplicationOfVector(structure[i][x].weights,biasesLayerError[structure.size()-2-i]);
+            difference.push_back(Vector::sumOfVector(sum));
         }
         
-        std::vector<long double> localOutput=getLayerOutput(i);
+        std::vector<long double> error=Vector::multiplicationOfVector(derivative,difference);
         
-        std::vector<long double> localDerivative=Vector::operationOfVector(localOutput,backward);
-        
-        localError=Vector::multiplicationOfVector(localDerivative,localError);
-        
-        layerError.push_back(localError);
+        biasesLayerError.push_back(error);
     }
     
-    return layerError;
+    return biasesLayerError;
 }
 
-void NeuralNetwork::backwardPropagation(long double learningRate,std::vector<std::vector<long double>>& layerError) {
-    for(auto i=0;i<structure.size()-1;++i) {
+std::vector<std::vector<long double>> NeuralNetwork::getWeightsLayerError(std::vector<std::vector<long double>>& biasesLayerError) {
+    
+    std::vector<std::vector<long double>> weightsLayerError;
+    
+    for(auto i=0;i<biasesLayerError.size();++i) {
+        std::vector<Neuron> layerValue=structure[structure.size()-2-i];
         
-        for(auto x=0;x<structure[i].size();++x) {
-            for(auto y=0;y<structure[i][x].weights.size();++y) {
-                structure[i][x].weights[y]-=layerError[layerError.size()-1-i][y]*structure[i][x].value*learningRate;
+        std::vector<long double> local;
+        
+        for(auto x=0;x<layerValue.size();++x) {
+            for(auto y=0;y<biasesLayerError[i].size();++y) {
+                local.push_back(layerValue[x].value*biasesLayerError[i][y]);
             }
         }
-        
-        for(auto x=0;x<structure[i+1].size();++x) {
-            structure[i+1][x].bias-=layerError[layerError.size()-i-1][x]*learningRate;
+        weightsLayerError.push_back(local);
+    }
+    
+    return weightsLayerError;
+}
+
+void NeuralNetwork::backwardPropagation(long double learningRate,std::vector<std::vector<long double>>& biasesLayerError,std::vector<std::vector<long double>>& weightsLayerError) {
+    for(auto i=0;i<biasesLayerError.size();++i) {
+        for(auto x=0;x<structure[structure.size()-1-i].size();++x) {
+            structure[structure.size()-1-i][x].bias-=biasesLayerError[i][x]*learningRate;
         }
-        
+    }
+    
+    for(auto i=0;i<weightsLayerError.size();++i) {
+        for(auto x=0;x<structure[structure.size()-2-i].size();++x) {
+            for(auto y=0;y<structure[structure.size()-2-i][x].weights.size();++y) {
+                structure[structure.size()-2-i][x].weights[y]-=weightsLayerError[i][x*structure[structure.size()-2-i][x].weights.size()+y]*learningRate;
+            }
+        }
     }
 }
 
-NeuralNetwork::NeuralNetwork(std::vector<unsigned long long int> structure,std::vector<std::vector<long double>>& input,std::vector<std::vector<long double>>& output) {
+NeuralNetwork::NeuralNetwork(std::vector<unsigned long long int> structure) {
     for(auto i=0;i<structure.size();++i) {
         this->structure.push_back(std::vector<Neuron>(structure[i]));
     }
-    
+    initialize();
+}
+
+void NeuralNetwork::setActivationFunction(long double(*forward)(long double),long double(*backward)(long double)) {
+    this->forward=forward;
+    this->backward=backward;
+}
+
+void NeuralNetwork::loadData(std::vector<std::vector<long double>>& input,std::vector<std::vector<long double>>& output) {
     this->input=input;
     this->output=output;
-    
-    initialize();
 }
 
 long double NeuralNetwork::getLoss(std::vector<long double> actualOutput,std::vector<long double> targetOutput) {
@@ -130,11 +161,11 @@ long double NeuralNetwork::getLoss(std::vector<long double> actualOutput,std::ve
     return value;
 }
 
-long double NeuralNetwork::getCost(long double(*forward)(long double)) {
+long double NeuralNetwork::getCost() {
     long double value=0.0;
     
     for(auto i=0;i<input.size();++i) {
-        value+=getLoss(predict(input[i],forward),output[i]);
+        value+=getLoss(predict(input[i]),output[i]);
     }
     
     value/=input.size();
@@ -142,97 +173,110 @@ long double NeuralNetwork::getCost(long double(*forward)(long double)) {
     return value;
 }
 
-void NeuralNetwork::batchGradientDescent(unsigned long long int iterations,long double learningRate,long double(*forward)(long double),long double(*backward)(long double)) {
+void NeuralNetwork::batchGradientDescent(unsigned long long int iterations,long double learningRate,bool track,const char* directory) {
+    std::vector<long double> cost;
+    
     for(unsigned long long int i=0;i<iterations;++i) {
         
-        std::vector<std::vector<std::vector<long double>>> gradients;
+        std::vector<std::vector<std::vector<long double>>> biasesGradients;
+        
+        std::vector<std::vector<std::vector<long double>>> weightsGradients;
         
         for(unsigned long long int e=0;e<input.size();++e) {
-            std::vector<long double> actualOutput=forwardPropagation(input[e],forward);
-            std::vector<long double> error=Vector::subtractionOfVector(actualOutput,output[e]);
-            std::vector<std::vector<long double>> layerError=getLayerError(error,backward);
+            std::vector<long double> actualOutput=forwardPropagation(input[e]);
             
-            gradients.push_back(layerError);
+            std::vector<std::vector<long double>> biasesLayerError=getBiasesLayerError(actualOutput,output[e]);
+            
+            std::vector<std::vector<long double>> weightsLayerError=getWeightsLayerError(biasesLayerError);
+            
+            biasesGradients.push_back(biasesLayerError);
+            
+            weightsGradients.push_back(weightsLayerError);
             
             reset();
         }
         
-        std::vector<std::vector<long double>> averageLayerError=Matrix::averageOfMatrix(gradients);
+        std::vector<std::vector<long double>> averageBiasesGradients=Matrix::averageOfMatrix(biasesGradients);
         
-        backwardPropagation(learningRate,averageLayerError);
+        std::vector<std::vector<long double>> averageWeightsGradients=Matrix::averageOfMatrix(weightsGradients);
+        
+        backwardPropagation(learningRate,averageBiasesGradients,averageWeightsGradients);
+        
+        cost.push_back(getCost());
+    }
+    if(track) {
+        File::writeAsVector(directory,cost);
     }
 }
 
-void NeuralNetwork::stochasticGradientDescent(unsigned long long int iterations,long double learningRate,long double(*forward)(long double),long double(*backward)(long double)) {
+void NeuralNetwork::stochasticGradientDescent(unsigned long long int iterations,long double learningRate,bool track,const char* directory) {
+    std::vector<long double> cost;
+    
     for(unsigned long long int i=0;i<iterations;++i) {
         
         for(unsigned long long int e=0;e<input.size();++e) {
-            unsigned long long int index=rand()%input.size();
         
-            std::vector<long double> actualOutput=forwardPropagation(input[index],forward);
+            std::vector<long double> actualOutput=forwardPropagation(input[e]);
         
-            std::vector<long double> error=Vector::subtractionOfVector(actualOutput,output[index]);
+            std::vector<std::vector<long double>> biasesLayerError=getBiasesLayerError(actualOutput,output[e]);
         
-            std::vector<std::vector<long double>> layerError=getLayerError(error,backward);
-        
-            backwardPropagation(learningRate,layerError);
-        
+            std::vector<std::vector<long double>> weightsLayerError=getWeightsLayerError(biasesLayerError);
+            
+            backwardPropagation(learningRate,biasesLayerError,weightsLayerError);
+            
             reset();
+            
+            cost.push_back(getCost());
         }
+        shuffle(input,output);
+    }
+    if(track) {
+        File::writeAsVector(directory,cost);
     }
 }
 
-void NeuralNetwork::miniBatchGradientDescent(unsigned long long int batchSize,unsigned long long int iterations,long double learningRate,long double(*forward)(long double),long double(*backward)(long double)) {
+void NeuralNetwork::miniBatchGradientDescent(unsigned long long int batchSize,unsigned long long int iterations,long double learningRate,bool track,const char* directory) {
+    std::vector<long double> cost;
+    
     for(unsigned long long int i=0;i<iterations;++i) {
         
         for(unsigned long long int e=0;e<input.size()/batchSize;++e) {
             
-            std::vector<std::vector<std::vector<long double>>> gradients;
+            std::vector<std::vector<std::vector<long double>>> biasesGradients;
             
-            for(unsigned long long int x=0;x<batchSize;++x) {
-                unsigned long long int index=e*batchSize+x;
+            std::vector<std::vector<std::vector<long double>>> weightsGradients;
+            
+            for(unsigned long long int b=0;b<batchSize;++b) {
+                std::vector<long double> actualOutput=forwardPropagation(input[e*batchSize+b]);
                 
-                std::vector<long double> actualOutput=forwardPropagation(input[index],forward);
-                std::vector<long double> error=Vector::subtractionOfVector(actualOutput,output[index]);
-                std::vector<std::vector<long double>> layerError=getLayerError(error,backward);
+                std::vector<std::vector<long double>> biasesLayerError=getBiasesLayerError(actualOutput,output[e*batchSize+b]);
                 
-                gradients.push_back(layerError);
+                std::vector<std::vector<long double>> weightsLayerError=getWeightsLayerError(biasesLayerError);
+                
+                biasesGradients.push_back(biasesLayerError);
+                
+                weightsGradients.push_back(weightsLayerError);
                 
                 reset();
             }
             
-            std::vector<std::vector<long double>> averageLayerError=Matrix::averageOfMatrix(gradients);
+            std::vector<std::vector<long double>> averageBiasesGradients=Matrix::averageOfMatrix(biasesGradients);
             
-            backwardPropagation(learningRate,averageLayerError);
+            std::vector<std::vector<long double>> averageWeightsGradients=Matrix::averageOfMatrix(weightsGradients);
+            
+            backwardPropagation(learningRate,averageBiasesGradients,averageWeightsGradients);
+            
+            cost.push_back(getCost());
         }
-        
-        std::vector<std::vector<std::vector<long double>>> gradients;
-        
-        for(unsigned long long int e=0;e<input.size()%batchSize;++e) {
-            unsigned long long int index=input.size()%batchSize+e;
-            
-            std::vector<long double> actualOutput=forwardPropagation(input[index],forward);
-            std::vector<long double> error=Vector::subtractionOfVector(actualOutput,output[index]);
-            std::vector<std::vector<long double>> layerError=getLayerError(error,backward);
-            
-            gradients.push_back(layerError);
-            
-            reset();
-        }
-        
-        if(gradients.size()>0) {
-        
-        std::vector<std::vector<long double>> averageLayerError=Matrix::averageOfMatrix(gradients);
-        
-        backwardPropagation(learningRate,averageLayerError);
-        }
-        
-        shuffle(input);
+    }
+    
+    if(track) {
+        File::writeAsVector(directory,cost);
     }
 }
 
-std::vector<long double> NeuralNetwork::predict(std::vector<long double> input,long double(*function)(long double)) {
-    std::vector<long double> output=forwardPropagation(input,function);
+std::vector<long double> NeuralNetwork::predict(std::vector<long double> input) {
+    std::vector<long double> output=forwardPropagation(input);
     reset();
     return output;
 }
